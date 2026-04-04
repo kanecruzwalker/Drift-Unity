@@ -97,3 +97,31 @@ InitTestScene*.unity*
 
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
+
+
+
+
+# -----------------------------------------------
+# Drift — Project-specific additions
+# -----------------------------------------------
+ 
+# Personal development log — session notes, assignment context, restore prompts
+# A clean public CHANGELOG.md will be written at project completion
+DEVLOG.md
+ 
+# Android keystore — never commit signing credentials
+*.keystore
+*.jks
+ 
+# Unity Gaming Services local config (may contain project secrets)
+/[Aa]ssets/Resources/UnityServicesProjectConfiguration*
+ 
+# OS clutter
+.DS_Store
+Thumbs.db
+Desktop.ini
+ 
+# Editor-specific workspace files
+*.code-workspace
+.idea/
+ 
