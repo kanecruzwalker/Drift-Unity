@@ -6,8 +6,8 @@
 ┌──────────────────────────────────────────────────────────────┐
 │                        INPUT LAYER                            │
 │  InputManager.cs                                              │
-│  · Reads Input.touches      (sole consumer)                  │
-│  · Reads Input.acceleration (sole consumer)                  │
+│  · Reads EnhancedTouch API  (sole consumer)                  │
+│  · Reads Accelerometer.current (New Input System)            │
 │  · Classifies: tap (1/2/3), swipe, pinch, hold,             │
 │                finger count (1-5), tilt                       │
 │  · Fires C# events via GestureEvents.cs                     │
@@ -47,7 +47,9 @@
 - **GameManager.cs** — singleton, game phase state machine (Lobby → Playing), wires system references
 
 ### Input/
-- **InputManager.cs** — sole file reading `Input.touches` and `Input.acceleration`. Handles tap timing and disambiguation, swipe detection, pinch, hold duration, finger count classification, and tilt. Fires all events each frame via `GestureEvents`.
+- **InputManager.cs** — sole file reading touch (EnhancedTouch API) and accelerometer (UnityEngine.InputSystem.Accelerometer.current). 
+      Fully migrated to New Input System. Handles tap timing and disambiguation, swipe detection, pinch, hold duration, 
+      finger count classification, and tilt. Fires all events each frame via `GestureEvents`.
 - **GestureEvents.cs** — static C# event definitions. The public contract every system depends on. All touch, tap, and tilt event signatures live here and nowhere else.
 
 ### Player/
@@ -169,8 +171,7 @@ This means single tap has a ~0.2s delay before firing — acceptable for precisi
 ## Tilt System Detail
 
 ```
-Input.acceleration (Vector3, hardware)
-        │
+Accelerometer.current.acceleration.ReadValue() (New Input System)        │
         ▼
 InputManager.Update()
   · Extract X/Y axes, normalize to -1..1

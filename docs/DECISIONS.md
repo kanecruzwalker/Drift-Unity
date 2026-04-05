@@ -15,11 +15,13 @@
 Mobile touch input in Unity can be accessed from anywhere via `Input.touches`. On a small project it's tempting to read touches directly in PlayerController or wherever needed. However this creates tight coupling between input hardware and game logic, makes testing harder, and means gesture logic gets scattered across files.
 
 **Decision:**
-All touch and tilt input is handled exclusively in `InputManager.cs`. It reads `Input.touches` and `Input.acceleration`, classifies all gestures, and fires C# events defined in `GestureEvents.cs`. Every other system subscribes to those events — nothing else ever reads hardware input directly.
+All touch and tilt input is handled exclusively in `InputManager.cs`. It reads touch via EnhancedTouch API and tilt via Accelerometer.current (New Input System), classifies all gestures, and fires C# events defined in `GestureEvents.cs`. Every other system subscribes to those events — nothing else ever reads hardware input directly.
 
 **Alternatives considered:**
 - Direct input reads in PlayerController — rejected, scatters gesture logic and creates tight coupling
-- Unity's new Input System package — considered, but adds setup overhead; legacy touch API is sufficient for our gesture set
+- Unity's new Input System package — adopted mid-session after confirming legacy Input.touches 
+  does not route touches on Android when New Input System package is active. Full migration to 
+  EnhancedTouch API and Accelerometer.current completed before first device-verified build.
 
 **Consequences:**
 InputManager becomes the single source of truth for all input state. Adding a new gesture means editing one file. Swapping input backends later means replacing one file. GestureEvents.cs provides a clean public contract every system depends on.

@@ -48,7 +48,7 @@
 
 ## Architecture Highlights
 
-- **InputManager** is the sole consumer of `Input.touches` and `Input.acceleration` — fires C# events that all other systems subscribe to. Nothing else reads hardware input directly.
+- **InputManager** is the sole consumer of touch (EnhancedTouch API) and accelerometer (New Input System) — fires C# events that all other systems subscribe to.-
 - **GestureEvents** is the single source of truth for all event signatures — touch, tap, and tilt.
 - **Unity Relay** handles NAT traversal — no server hosting or port forwarding needed.
 - **Server-authoritative** orb spawning via `WorldManager` — no collection desyncs in multiplayer.
