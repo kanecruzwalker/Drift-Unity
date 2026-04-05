@@ -71,6 +71,13 @@ fix(netcode): handle host disconnect gracefully
 docs: add ADR-001 through ADR-006 to DECISIONS.md
 chore: configure Android build settings and keystore
 chore: attach APK to GitHub Release v1.0.0
+feat(ui): UIFeedback and GestureFeedbackUI — player-facing visual feedback for all 11 inputs
+feat(ui): FeedbackService audio/haptic stub wired to all input event handlers
+fix(input): hold/pinch hysteresis guard — HoldLockDelay and HoldBreakThreshold
+fix(input): tilt first-touch calibration replacing unreliable Invoke timer
+fix(input): continuous low-pass tilt baseline for self-correcting drift during play
+fix(input): negate tilt Y-axis for correct Android portrait forward/back mapping
+docs: add ADR-007 UIFeedback architecture and ADR-008 tilt calibration discoveries
 ```
 
 ---

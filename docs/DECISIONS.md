@@ -133,3 +133,78 @@ Forcing an action onto triple tap with no natural gameplay fit would produce a d
 Nine inputs are fully active. Triple tap is present in the event system, documented as reserved, and costs nothing to leave dormant. Future chest/interactable work can wire it up without touching the input layer.
 
 ---
+---
+
+## ADR-007: UIFeedback Architecture — Separation of Canvas Ownership and Animation Logic
+
+**Date:** feature/ui-feedback
+**Status:** Accepted
+
+**Context:**
+Visual feedback requires two distinct concerns: (1) owning and configuring UI elements in the Canvas hierarchy, and (2) animating those elements in response to input events. Putting both in one script creates a class that is simultaneously a Unity scene setup tool and a per-frame animation driver — two very different responsibilities.
+
+Additionally, feedback elements need to be auto-wired to UIFeedback's Inspector slots to avoid requiring manual Canvas setup before any input feedback works.
+
+**Decision:**
+Split into two scripts with a clear ownership contract:
+
+- **GestureFeedbackUI.cs** — owns the Canvas hierarchy. Creates all Image elements procedurally at Awake (via `autoBuildCanvas`). Provides public properties for each element. Calls `AutoPopulateFeedback(UIFeedback target)` to inject references into UIFeedback via reflection, removing manual Inspector wiring as a hard requirement.
+- **UIFeedback.cs** — owns all animation logic. Subscribes to GestureEvents. Drives every visual effect. Has no knowledge of how elements were created — it only knows their Image references.
+
+**Player anchor strategy:**
+UIFeedback resolves the player screen position via `FindWithTag("Player")` each frame with a screen-center fallback. This makes UIFeedback functional before PlayerController is built and auto-connects at runtime once a player exists — zero manual wiring needed at any project stage.
+
+**Four-finger beam placeholder:**
+The four-finger share beam requires a networked partner position (from NetworkPlayer / NetworkVariable) which does not yet exist. Rather than drawing a beam toward an arbitrary screen position, the four-finger gesture shows a pulsing "searching" ring at the player anchor. This is honest about the system state and requires no cleanup when the real beam is wired. The actual beam direction will be subscribed from NetworkPlayer's partner position in feature/netcode-foundation.
+
+**Particle system hooks:**
+All particle effects are optional Inspector slots with safe null-guards. Logic always runs; particles play if assigned. This means the game has full functional feedback with no VFX assets, and real particles can be attached at any time without code changes.
+
+**Procedural sprite placeholders:**
+GestureFeedbackUI generates minimal circle, ring, arrow, and cone sprites programmatically when no sprite is assigned. This ensures every effect has a visible representation from the first run — no blank invisible UI elements blocking iteration.
+
+**Alternatives considered:**
+- Single UIFeedback script owning Canvas + animation — rejected, violates single responsibility and makes Canvas setup logic coupled to per-frame animation code.
+- Manual Inspector wiring only — rejected, adds friction before PlayerController and Canvas exist; auto-populate removes that bottleneck entirely.
+- Always require real sprites — rejected, forces art dependency before the input system is even verified working.
+
+**Consequences:**
+Both scripts attach to the same GameObject as InputManager. GestureFeedbackUI runs Awake first (same frame), builds the Canvas, and injects references into UIFeedback before UIFeedback's Awake event subscriptions fire. Auto-populate via reflection is safe at runtime and requires no UnityEditor namespace. Any of the procedural sprites can be replaced with real art by assigning a sprite in GestureFeedbackUI's Inspector — zero code changes.
+
+---
+
+## ADR-008: Tilt Input — Axis Mapping, Calibration Strategy, and Self-Correcting Baseline
+
+**Date:** feature/ui-feedback
+**Status:** Accepted
+
+**Context:**
+Tilt input via accelerometer went through three iterations before reaching correct behavior. Each iteration surfaced a real device behavior that wasn't apparent from documentation alone. This ADR records the decisions and discoveries so future contributors understand why the implementation looks the way it does.
+
+**Decision:**
+Implement a three-layer tilt system arrived at through on-device testing:
+
+- **Layer 1 — Snap on first touch** (`CalibrateNeutral()`): Called on `TouchPhase.Began` of the first touch. The device is definitively in the player's hand at this moment. Auto-calibrate via `Invoke(0.5f)` was unreliable — the delay sometimes fired before the player picked up the phone, capturing a flat baseline instead of a natural hold angle.
+- **Layer 2 — Continuous low-pass self-correction**: Every frame, `_tiltNeutral` lerps toward the current accelerometer reading at `tiltSmoothingRate`. This self-corrects baseline drift as the player shifts their hold angle during play — no manual recalibration needed. Rate 0.5 gives ~2s to re-center. Standard approach for casual mobile games where players move freely.
+- **Layer 3 — Deadzone**: Magnitude below `tiltDeadzone` treated as zero. Suppresses resting jitter from the accelerometer when the device is held still.
+
+**Android portrait Y-axis inversion:**
+Left/right tilt (X axis) mapped correctly with no adjustment. Forward/back tilt (Y axis) was inverted — tilting the top of the phone away moved the arrow downward instead of upward. Root cause: on Android in portrait orientation, accelerometer Y increases when the bottom of the phone tilts away from the player (opposite of screen-space up convention). Fixed by negating `delta.y` when constructing `rawTilt`:
+
+```csharp
+Vector2 rawTilt = new Vector2(delta.x, -delta.y) * tiltSensitivity;
+```
+
+**Hold/pinch hysteresis (companion fix):**
+Two-finger hold was immediately hijacked by pinch when fingers micro-moved while settling onto the screen. Fixed with a hysteresis lock in `HandleTwoTouches()`: fingers must remain stationary for `HoldLockDelay` (0.15s) before hold locks in, and once locked require `HoldBreakThreshold` (12px) movement to break back to pinch. The deliberate asymmetry between entry and break thresholds is the key design decision — mirrors standard gesture disambiguators in iOS/Android native recognizers.
+
+**Alternatives considered:**
+- Gyroscope delta instead of accelerometer absolute — more precise but higher battery cost and more complex normalization across devices; accelerometer sufficient for casual drift gameplay.
+- Single calibration snapshot only — rejected, doesn't account for hold angle drift during play.
+- Invoke(delay) auto-calibrate — rejected after on-device testing showed unreliable capture timing.
+- Explicit recalibrate button — viable, kept as a future option; first-touch + low-pass filter makes it unnecessary for most sessions.
+
+**Consequences:**
+`HandleTilt()` is self-contained — all three layers run inside one method. `CalibrateNeutral()` remains public so a UI recalibrate button can call it explicitly if needed. The Y-axis negation and its rationale are documented inline so future contributors don't rediscover it. See inline comments in `HandleTilt()` for the full axis mapping reference.
+
+---

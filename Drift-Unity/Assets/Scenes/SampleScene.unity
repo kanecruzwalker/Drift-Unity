@@ -443,6 +443,9 @@ GameObject:
   - component: {fileID: 1135105675}
   - component: {fileID: 1135105674}
   - component: {fileID: 1135105673}
+  - component: {fileID: 1135105677}
+  - component: {fileID: 1135105676}
+  - component: {fileID: 1135105678}
   m_Layer: 0
   m_Name: InputManager
   m_TagString: Untagged
@@ -481,7 +484,7 @@ MonoBehaviour:
   tapMoveThreshold: 20
   holdChargeTime: 1.5
   holdStartDelay: 0.1
-  tiltDeadzone: 0.1
+  tiltDeadzone: 0.18
   tiltSensitivity: 2
 --- !u!4 &1135105675
 Transform:
@@ -498,6 +501,92 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1135105676
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1135105672}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7cdeba68825a6314e8569700b555b10a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::GestureFeedbackUI
+  targetCanvas: {fileID: 0}
+  autoBuildCanvas: 1
+  holdRingSprite: {fileID: 0}
+  tapPopSprite: {fileID: 0}
+  dashFlareSprite: {fileID: 0}
+  tiltArrowSprite: {fileID: 0}
+  tiltConeSprite: {fileID: 0}
+  zoomIndicatorSprite: {fileID: 0}
+  feedbackTarget: {fileID: 1135105677}
+--- !u!114 &1135105677
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1135105672}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11bdccb5309cfe048a96aaca803885d6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UIFeedback
+  feedbackCanvas: {fileID: 0}
+  holdRadialFill: {fileID: 0}
+  tapPopImage: {fileID: 0}
+  dashFlareImage: {fileID: 0}
+  tiltArrowImage: {fileID: 0}
+  tiltConeImage: {fileID: 0}
+  zoomIndicatorImage: {fileID: 0}
+  zoomLevelText: {fileID: 0}
+  holdBurstParticles: {fileID: 0}
+  threeFingerRingParticles: {fileID: 0}
+  domainPulseParticles: {fileID: 0}
+  dashTrailParticles: {fileID: 0}
+  tapPopDuration: 0.25
+  tapPopMaxScale: 1.8
+  dashFlareDuration: 0.35
+  dashFlareMaxScale: 2.5
+  holdFillColor: {r: 0.3, g: 0.8, b: 1, a: 0.7}
+  holdCompleteColor: {r: 1, g: 1, b: 0.4, a: 1}
+  threeFingerRingCount: 3
+  threeFingerRingDuration: 0.6
+  threeFingerRingStagger: 0.12
+  fourFingerPulseRate: 0.5
+  domainPulseDuration: 0.7
+  tiltArrowOffset: 80
+  tiltArrowThreshold: 0.05
+  zoomFadeDelay: 1.2
+  zoomFadeDuration: 0.4
+--- !u!114 &1135105678
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1135105672}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c8e8369a7a7737c4bb4db0ac8fe3d2ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FeedbackService
+  tapPopClip: {fileID: 0}
+  dashFlareClip: {fileID: 0}
+  holdTickClip: {fileID: 0}
+  holdCompleteClip: {fileID: 0}
+  threeFingerBurstClip: {fileID: 0}
+  fourFingerSearchClip: {fileID: 0}
+  domainExpandClip: {fileID: 0}
+  tiltStartClip: {fileID: 0}
+  calibratedClip: {fileID: 0}
+  hapticsEnabled: 1
+  lightHapticIntensity: 0.3
+  mediumHapticIntensity: 0.55
+  heavyHapticIntensity: 0.85
+  holdTickInterval: 0.3
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

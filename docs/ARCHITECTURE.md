@@ -70,6 +70,9 @@
 - **UIFeedback.cs** — subscribes to GestureEvents, drives all visual feedback: tap pop, dash flare, radial fill, ring animations, beam, domain pulse, tilt arrow, aimed cone
 - **HUD.cs** — resource count, partner status, domain progress bars
 
+- **FeedbackService.cs** — singleton service for centralized audio and haptic feedback.
+  Receives FeedbackType calls from UIFeedback alongside every visual effect. All audio
+  clips and haptic patterns are Inspector-assigned — safe no-op stubs until assets are ready.
 ---
 
 ## Full Gesture Event Contract
@@ -188,6 +191,12 @@ InputManager.Update()
                 OnTiltChanged  → show directional arrow at player edge
                 OnTiltAimed    → draw asymmetric cone on pulse circle
 ```
+
+Tilt calibration — three-layer system (see ADR-008):
+  · Layer 1: Snap on first touch — CalibrateNeutral() called on TouchPhase.Began
+  · Layer 2: Continuous low-pass filter — _tiltNeutral lerps toward current accel each frame
+  · Layer 3: Deadzone — magnitude below threshold treated as zero
+Android portrait Y-axis is negated in HandleTilt() — tilt-forward maps to positive screen Y.
 
 ---
 
