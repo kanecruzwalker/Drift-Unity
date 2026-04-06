@@ -86,6 +86,10 @@ public class GameManager : MonoBehaviour
     private async void Start()
     {
         await InitializeUGS();
+
+        // TEMP: auto-start solo session for player movement testing
+        // Remove before feature/game-loop wires the real UI flow
+        await StartSoloSession();
     }
 
     private void OnEnable()
