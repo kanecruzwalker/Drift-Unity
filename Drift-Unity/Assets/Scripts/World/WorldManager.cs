@@ -356,6 +356,14 @@ public class WorldManager : NetworkBehaviour
         for (int i = 0; i < ZoneCount; i++)
         {
             Vector3 center = GetZoneCenter(i);
+            // Offset station from exact zone center for organic placement.
+            // Clamped so stations stay within their zone bounds.
+            float zoneSize = (GameConstants.WorldHalfExtent * 2f) / GameConstants.ZoneGridSize;
+            float maxOffset = zoneSize * 0.25f;
+            center.x += Random.Range(-maxOffset, maxOffset);
+            center.z += Random.Range(-maxOffset, maxOffset);
+            center.y = 0.1f;
+
             center.y = 0.1f;
 
             GameObject go = Instantiate(
