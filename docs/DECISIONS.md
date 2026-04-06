@@ -387,7 +387,7 @@ type has a clearly marked entry point.
 ## ADR-014: ZoneState Enum as Single Source of Truth
 
 **Date:** feature/netcode-foundation (planned)
-**Status:** Accepted — implementation in feature/world-layer
+**Status:** Accepted — implemented in feature/world-layer, verified in editor
 
 **Context:**
 The world has zones with complex interdependencies: spawn rates depend
@@ -426,7 +426,9 @@ without touching code.
 ## ADR-015: WorldSeed Pattern for Deterministic Layout
 
 **Date:** feature/netcode-foundation (planned)
-**Status:** Accepted — implementation in feature/world-layer
+**Status:** Accepted — implemented in feature/world-layer. worldSeed generates
+on server, syncs to all clients, all clients run identical layout from same seed.
+Verified: Zone 0→Safe, adjacent zones→Discovered on session start.
 
 **Context:**
 The world layout (zone positions, hazard placements, station locations)

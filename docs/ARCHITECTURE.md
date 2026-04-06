@@ -79,6 +79,69 @@
 
 
 
+## World Layer — Added in feature/world-layer
+
+### World/
+- **WorldManager.cs** — server-authoritative singleton. Generates worldSeed
+  NetworkVariable at session start, initializes ZoneState[] array (Zone 0 = Safe,
+  all others = Undiscovered), runs SpawnTick() coroutine every SpawnTickInterval
+  seconds, spawns one DepositStation per zone at session start, syncs zone state
+  changes to all clients via SyncZoneStateClientRpc. When a zone becomes Safe,
+  UnlockAdjacentZones() transitions neighboring Undiscovered zones to Discovered.
+  GetZoneIndexForPosition() maps world-space positions to zone indices for player
+  and orb zone lookups (ADR-015).
+- **ResourceOrb.cs** — NetworkObject. Four types drive behavior and color:
+  Stationary (bob in place, soft blue-white), Patrol (circular waypoint, amber),
+  Guide (drift toward undiscovered edges, pale green), Hazard (stationary, crimson,
+  damages on contact in PvE). RequestCollectServerRpc validates proximity and awards
+  resourceValue to the collecting player's NetworkPlayer (ADR-004). Breathing pulse
+  animation runs on all clients. Perlin noise offsets distribute orbs organically
+  within zone bounds rather than in square clusters.
+- **DepositStation.cs** — NetworkObject per zone. NetworkVariable<int> Progress
+  incremented server-side via RequestDepositServerRpc. At StationContestedThreshold
+  calls WorldManager.SetZoneState(Contested). At StationFillThreshold calls
+  SetZoneState(Safe) and opens ZoneShop. Material color interpolates dark→amber→teal
+  matching the bioluminescent palette.
+- **DomainZone.cs** — client-only, no NetworkBehaviour. Polls
+  WorldManager.GetZoneState() each frame. Drives fog mesh opacity, ground plane
+  color, hazard overlay alpha, and minimap dot color per ZoneState. Never writes
+  to the network — fog state is per-client, zone unlock state is synced via
+  WorldManager (ADR-014).
+
+### Stubs (interface contracts defined, behavior in future branches)
+- **ZoneShop.cs** — IInteractable, opens on Safe zone, full shop UI in feature/hud-and-polish
+- **EnemyOrb.cs** — IEntity + IDamageable, patrol structure ready, AI in future
+- **AllyNPC.cs** — IEntity + IDamageable, HireContract owner tracking ready
+
+### ScriptableObjects
+- **EntityStatTable** — per-entity stats (health, speed, damage, faction), one asset per EntityType
+- **SpawnRateTable** — orb and enemy spawn rates per ZoneState, Inspector-tunable
+- **ShopItemTable** — item pool with Fisher-Yates random selection for shop visits
+
+### Scene additions
+- WorldManager GameObject with NetworkObject
+- Ground plane with #0D0B14 dark material (bioluminescent palette base)
+- ResourceOrb and DepositStation prefabs registered in DefaultNetworkPrefabs
+- SpawnRateTable, EntityStatTable, ShopItemTable assets created and assigned
+
+### Key additions to existing scripts
+- ZoneState and GameMode enums added to GameManager.cs as top-level types
+- NetworkPlayer.SetResourceCount() added for server-side resource management
+- WorldManager.GetZoneState() / SetZoneState() public API
+
+### Polish
+- Perlin noise offset on orb spawn positions — breaks square grid clustering
+- Station position noise offset ±25% of zone size — organic placement
+- SpawnRateTable tuned: orbRateUndiscovered=0.05, orbRateDiscovered=0.03
+- Player spawn Y=1.0 — prevents ground intersection with Rigidbody freeze
+
+### FUTURE noted
+- Voronoi zone layout replacing grid math — organic territory boundaries,
+  nearest-seed point lookup instead of integer division. Documented in DEVLOG roadmap.
+  Impact: WorldManager, DomainZone, DepositStation, MiniMap.
+
+
+
 
 ## Netcode Layer — Added in feature/netcode-foundation
 
