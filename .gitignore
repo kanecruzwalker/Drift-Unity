@@ -125,3 +125,10 @@ Desktop.ini
 *.code-workspace
 .idea/
  
+
+
+ # Unity Performance Testing artifacts
+Drift-Unity/Assets/Resources/PerformanceTestRunInfo.json
+Drift-Unity/Assets/Resources/PerformanceTestRunInfo.json.meta
+Drift-Unity/Assets/Resources/PerformanceTestRunSettings.json
+Drift-Unity/Assets/Resources/PerformanceTestRunSettings.json.meta
