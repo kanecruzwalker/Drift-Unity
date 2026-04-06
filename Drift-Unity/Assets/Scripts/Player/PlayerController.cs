@@ -156,7 +156,20 @@ public class PlayerController : NetworkBehaviour, IDamageable, IEntity
     {
         if (!IsOwner || !IsAlive) return;
 
-        Vector3 force = new Vector3(delta.x, 0f, delta.y)
+        // Transform screen-space swipe delta into camera-relative world space.
+        // Raw delta.x/delta.y are screen axes — we project them onto the camera's
+        // forward and right vectors (flattened to XZ plane) so movement matches
+        // what the player sees regardless of camera angle or mode.
+        Vector3 camForward = Camera.main.transform.forward;
+        Vector3 camRight = Camera.main.transform.right;
+
+        // Flatten to XZ plane — remove any Y component so player stays grounded.
+        camForward.y = 0f;
+        camRight.y = 0f;
+        camForward.Normalize();
+        camRight.Normalize();
+
+        Vector3 force = (camRight * delta.x + camForward * delta.y)
                         * GameConstants.SwipeForceMultiplier;
         _rb.AddForce(force, ForceMode.Impulse);
 
@@ -205,10 +218,20 @@ public class PlayerController : NetworkBehaviour, IDamageable, IEntity
     {
         if (!IsOwner || !IsAlive || _dashOnCooldown) return;
 
-        Vector3 dashDir = _rb.linearVelocity.magnitude > 0.1f
-            ? _rb.linearVelocity.normalized
-            : transform.forward;
+        // Dash in current movement direction.
+        // If nearly stationary, use the last known swipe direction instead.
+        // Never dash in an arbitrary world direction — no-op if no direction available.
+        Vector3 flatVel = new Vector3(
+            _rb.linearVelocity.x, 0f, _rb.linearVelocity.z);
 
+        if (flatVel.magnitude < 0.1f)
+        {
+            // No current velocity — skip dash rather than firing in random direction.
+            // Player must be moving to dash. This makes dash feel intentional.
+            return;
+        }
+
+        Vector3 dashDir = flatVel.normalized;
         _rb.AddForce(dashDir * GameConstants.DashBurstForce, ForceMode.Impulse);
         _dashOnCooldown = true;
         Invoke(nameof(ResetDashCooldown), DashCooldown);
@@ -271,7 +294,11 @@ public class PlayerController : NetworkBehaviour, IDamageable, IEntity
         if (!IsOwner || !IsAlive) return;
 
         NetworkPlayer nearestPartner = FindNearestPartner();
-        if (nearestPartner == null) return;
+        if (nearestPartner == null) {
+            //No partner -clear beam so UIFeedback shows searching ring.
+            UIFeedback.Instance?.ClearBeamTarget();
+            return;
+        }
 
         // Wire the beam direction to UIFeedback.
         // UIFeedback reads _partnerScreenPos each frame in UpdateFourFingerFeedback.
@@ -319,9 +346,15 @@ public class PlayerController : NetworkBehaviour, IDamageable, IEntity
     private void UpdateBeamTarget(NetworkPlayer partner)
     {
         if (Camera.main == null) return;
-        // FUTURE: pass partner screen position directly to UIFeedback beam system
-        // UIFeedback.Instance?.SetBeamTarget(Camera.main.WorldToScreenPoint(
-        //     partner.worldPosition.Value));
+
+        // Convert partner world position to screen space and pass to UIFeedback.
+        // This wires the four-finger beam visual that was placeholder in feature/ui-feedback.
+        // See ADR-007 — this is the explicit TODO from that branch.
+        Vector3 partnerScreenPos = Camera.main.WorldToScreenPoint(
+            partner.worldPosition.Value);
+
+        UIFeedback.Instance?.SetBeamTarget(partnerScreenPos);
+
         Debug.Log($"[PlayerController] Beam target: {partner.worldPosition.Value}");
     }
 

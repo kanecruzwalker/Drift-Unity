@@ -164,12 +164,25 @@ public class UIFeedback : MonoBehaviour
     /// Whether a three-finger ring burst coroutine is currently running.
     private bool _threeFingerBurstActive = false;
 
+    /// Singleton reference so PlayerController can call SetBeamTarget directly.
+    public static UIFeedback Instance { get; private set; }
+
+    /// Screen-space position of the partner player — drives the four-finger beam direction.
+    private Vector3 _beamTargetScreenPos;
+
+    /// True when a valid partner position is available for beam direction.
+    private bool _beamTargetActive;
+
     // ─────────────────────────────────────────────────────────────────────────
     // UNITY LIFECYCLE
     // ─────────────────────────────────────────────────────────────────────────
 
     private void Awake()
     {
+        // Singleton setup — UIFeedback is always on the persistent InputManager GameObject.
+        if (Instance != null && Instance != this) { Destroy(this); return; }
+        Instance = this;
+
         InitializeUIElements();
     }
 
@@ -566,13 +579,55 @@ public class UIFeedback : MonoBehaviour
 
         if (dashFlareImage != null)
         {
-            dashFlareImage.rectTransform.position = _playerScreenPos;
-            dashFlareImage.transform.localScale = Vector3.one * Mathf.Lerp(1.0f, 1.6f, pulse);
-            SetImageAlpha(dashFlareImage, Mathf.Lerp(0.2f, 0.7f, pulse));
+            if (_beamTargetActive)
+            {
+                // Partner found — draw beam toward partner screen position.
+                // Position the ring between player and partner, rotated to face them.
+                Vector2 toPartner = (Vector2)_beamTargetScreenPos - _playerScreenPos;
+                Vector2 midpoint = _playerScreenPos + toPartner * 0.5f;
+
+                dashFlareImage.rectTransform.position = midpoint;
+
+                // Rotate to face partner direction.
+                float angle = Mathf.Atan2(toPartner.y, toPartner.x) * Mathf.Rad2Deg;
+                dashFlareImage.rectTransform.rotation = Quaternion.Euler(0f, 0f, angle);
+
+                // Scale X to span the distance, Y stays thin — beam shape.
+                float dist = toPartner.magnitude;
+                dashFlareImage.rectTransform.sizeDelta = new Vector2(dist, 12f);
+                SetImageAlpha(dashFlareImage, Mathf.Lerp(0.4f, 0.8f, pulse));
+            }
+            else
+            {
+                // No partner — show pulsing "searching" ring at player position (original behavior).
+                dashFlareImage.rectTransform.position = _playerScreenPos;
+                dashFlareImage.rectTransform.rotation = Quaternion.identity;
+                dashFlareImage.rectTransform.sizeDelta = new Vector2(120f, 120f);
+                dashFlareImage.transform.localScale = Vector3.one * Mathf.Lerp(1.0f, 1.6f, pulse);
+                SetImageAlpha(dashFlareImage, Mathf.Lerp(0.2f, 0.7f, pulse));
+            }
         }
 
         // Reset the flag — it will be set again next frame if the gesture continues.
         _fourFingerActive = false;
+    }
+
+    /// <summary>
+    /// Sets the beam target screen position for the four-finger share gesture.
+    /// Called by PlayerController.UpdateBeamTarget() when a partner is found.
+    /// Replaces the "searching" pulse ring with a directed beam toward the partner.
+    /// Wires the placeholder that was documented in ADR-007.
+    /// </summary>
+    public void SetBeamTarget(Vector3 partnerScreenPos)
+    {
+        _beamTargetScreenPos = partnerScreenPos;
+        _beamTargetActive = true;
+    }
+
+    /// Clears the beam target — called when four-finger gesture ends or partner lost.
+    public void ClearBeamTarget()
+    {
+        _beamTargetActive = false;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
