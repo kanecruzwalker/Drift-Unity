@@ -41,6 +41,34 @@
 
 ---
 
+## Netcode Layer — Added in feature/netcode-foundation
+
+### Core/
+- **GameManager.cs** — UGS init + anonymous auth at startup. Phase state machine:
+  Initializing → MainMenu → Lobby → Playing. Coordinates RelayManager and LobbyManager
+  at each transition. Supports solo mode (host plays while waiting).
+- **GameConstants.cs** — single source of truth for all tuning values.
+- **IDamageable** / **IInteractable** / **IEntity** — interface contracts for all entities.
+- **ItemSlot / ActiveEffect / HireContract** — plain C# structs with INetworkSerializable
+  wrappers for NetworkVariable array serialization.
+
+### Netcode/
+- **RelayManager.cs** — Multiplayer Services 2.x session API. CreateSession returns a
+  join code. JoinSessionByCode and JoinSessionById for clients. QueryAvailableSessions
+  for the open rooms dashboard. LeaveSession on quit.
+- **LobbyManager.cs** — subscribes to ISession events (PlayerJoined, PlayerLeaving,
+  Changed). Tracks ready states. Fires OnGameStarted when host starts. Drives
+  5-second auto-refresh for the session browse dashboard.
+- **NetworkPlayer.cs** — per-player NetworkBehaviour with 8 NetworkVariables:
+  health, resourceCount, worldPosition, playerColor, isReady,
+  inventory (6 slots), activeEffects (4 max), hiredNPCs (3 max).
+
+### Packages added
+- com.unity.netcode.gameobjects 2.11.0
+- com.unity.services.multiplayer 2.1.3 (replaces individual Relay/Lobby SDKs)
+
+---
+
 ## Script Responsibilities
 
 ### Core/
