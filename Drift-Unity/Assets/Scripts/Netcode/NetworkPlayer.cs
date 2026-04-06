@@ -271,6 +271,19 @@ public class NetworkPlayer : NetworkBehaviour
                       $"Health={current:F1}/{GameConstants.PlayerMaxHealth}");
         // FUTURE: if (IsOwner) playerVisuals.TriggerDamageFlash();
     }
+
+
+
+    /// <summary>
+    /// Sets the player's resource count directly. Called server-side by
+    /// DepositStation when the player deposits all resources.
+    /// Only callable on the server — NetworkVariable write permission is Server.
+    /// </summary>
+    public void SetResourceCount(int count)
+    {
+        if (!IsServer) return;
+        resourceCount.Value = Mathf.Max(0, count);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

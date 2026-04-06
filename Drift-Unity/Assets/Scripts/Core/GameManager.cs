@@ -337,3 +337,18 @@ public enum GameMode
     PvE         // hazard zones active, enemy orbs spawn
     // FUTURE: PvP — player damage enabled, see ADR-012
 }
+
+
+
+/// <summary>
+/// Zone state drives spawn rates, hazards, shop availability, and fog of war.
+/// Single source of truth — WorldManager writes, all systems read (ADR-014).
+/// </summary>
+public enum ZoneState
+{
+    Undiscovered,   // fog active, high orb spawn, high enemy spawn
+    Discovered,     // fog cleared, high orb spawn, medium enemies
+    Contested,      // station partially filled, medium orbs, enemies present
+    Safe            // station full, low orbs, no enemies, shop available
+    // FUTURE: Corrupted — boss reverts Safe → Contested
+}
