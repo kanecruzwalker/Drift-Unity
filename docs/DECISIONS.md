@@ -208,3 +208,247 @@ Two-finger hold was immediately hijacked by pinch when fingers micro-moved while
 `HandleTilt()` is self-contained — all three layers run inside one method. `CalibrateNeutral()` remains public so a UI recalibrate button can call it explicitly if needed. The Y-axis negation and its rationale are documented inline so future contributors don't rediscover it. See inline comments in `HandleTilt()` for the full axis mapping reference.
 
 ---
+
+---
+
+## ADR-009: Rigidbody Force-Based Movement over Transform
+
+**Date:** feature/netcode-foundation (planned)
+**Status:** Accepted — implementation in feature/player-controller
+
+**Context:**
+PlayerController needs a movement model that feels satisfying on mobile.
+Two approaches exist in Unity: direct transform manipulation (move X units
+per frame) and Rigidbody physics (apply forces, let physics resolve position).
+The game's name is Drift — the movement feel is central to the identity.
+
+**Decision:**
+Rigidbody force-based movement. Swipe gesture applies an impulse force in
+the swipe direction. Tilt applies a continuous ambient force each frame.
+Drag (GameConstants.PlayerLinearDrag) bleeds momentum on release.
+Speed is capped at GameConstants.PlayerMaxSpeed.
+
+**Alternatives considered:**
+- Transform-based movement — snappy but no inertia. Doesn't match the
+  "drift" fantasy. Also harder to integrate with physics-based world objects.
+- Character Controller — designed for ground-based movement with gravity.
+  Overkill and wrong abstraction for a top-down floaty collector.
+
+**Consequences:**
+Movement has natural momentum and feels weighted without being slow.
+Rigidbody requires careful drag tuning — values live in GameConstants so
+balance changes need no code edits. Physics interactions with world objects
+(orbs, stations) work for free. NetworkTransform sync works cleanly with
+Rigidbody position.
+
+---
+
+## ADR-010: Multiplayer Services 2.x over Individual UGS SDKs
+
+**Date:** feature/netcode-foundation
+**Status:** Accepted
+
+**Context:**
+The original architecture planned separate packages for Relay
+(com.unity.services.relay) and Lobby (com.unity.services.lobby).
+During implementation, Unity's Multiplayer Services 2.x package was
+discovered — a unified SDK that replaces both individual packages and
+adds an ISession abstraction layer.
+
+**Decision:**
+Adopt Multiplayer Services 2.x (com.unity.services.multiplayer 2.1.3).
+Remove the separate Relay and Lobby package references from manifest.json.
+Use MultiplayerService.Instance.CreateSessionAsync(options.WithRelayNetwork())
+for host flow and JoinSessionByCodeAsync / JoinSessionByIdAsync for clients.
+
+**Alternatives considered:**
+- Keep individual Relay + Lobby SDKs — familiar from Euchre project but
+  requires manual Relay allocation, UnityTransport configuration, and
+  separate Lobby API calls. More code, more failure points.
+- Custom relay server — rejected, no self-hosting for a casual mobile game.
+
+**Consequences:**
+Session creation, Relay allocation, join code generation, and Netcode
+host/client startup all happen in a single SDK call. The SDK handles
+NAT traversal internally. The old Unity.Services.Relay namespace no longer
+exists — code written against it will not compile. Session browsing
+(open rooms dashboard) is built in via QuerySessionsAsync.
+ADR supersedes ADR-002's Relay implementation details.
+
+---
+
+## ADR-011: Three Camera Modes via CameraRig State Machine
+
+**Date:** feature/netcode-foundation (planned)
+**Status:** Accepted — implementation in feature/player-controller
+
+**Context:**
+Different players have different spatial preferences for a top-down
+collection game. Isometric gives the best awareness of surroundings.
+Top-down is cleaner and more readable. Third-person is most immersive.
+Rather than forcing one perspective, all three are offered.
+
+**Decision:**
+CameraRig.cs implements a state machine with three modes:
+- CameraMode.Isometric — 45° angle, smooth follow. Default.
+- CameraMode.TopDown — near-overhead, wider FOV.
+- CameraMode.ThirdPerson — behind and above player, most immersive.
+Mode toggled via HUD button. Preference persisted to PlayerPrefs using
+GameConstants.CameraModePrefKey so it survives between sessions on the
+same device. All modes use the same smooth follow speed
+(GameConstants.CameraFollowSpeed).
+
+**Alternatives considered:**
+- Single fixed isometric camera — simpler but limits player preference.
+- Let players set camera angle via drag gesture — conflicts with swipe
+  movement input. Not viable given the input model.
+
+**Consequences:**
+CameraRig is self-contained. Adding a fourth mode later requires adding
+an enum value and a case in the state machine — no other files change.
+PlayerPrefs persistence is device-local — two players on the same session
+can independently choose different camera modes.
+
+---
+
+## ADR-012: Session-Based Architecture, No Persistence This Build
+
+**Date:** feature/netcode-foundation
+**Status:** Accepted
+
+**Context:**
+The full game vision includes persistent worlds — a player's safe zones,
+station progress, and inventory surviving between sessions (Firebase/Firestore).
+The assignment deadline is ~3 days. Implementing persistence correctly
+requires a backend data model, serialization, and conflict resolution
+for concurrent players. That's a separate project.
+
+**Decision:**
+Session-based only for the assignment build. Each session starts fresh.
+Host generates a new worldSeed, all state is in-memory via NetworkVariables,
+everything clears on session end. Firebase persistence is documented as the
+first post-submission feature in the DEVLOG roadmap.
+
+The data model is designed to be persistence-ready: zoneStates[],
+stationProgress[], inventory[], activeEffects[], and hiredNPCs[] are all
+structured arrays that can be serialized to Firestore documents without
+refactoring. The transition to persistence is additive, not breaking.
+
+**Alternatives considered:**
+- PlayerPrefs persistence (local only) — not true persistence, doesn't
+  sync between players, misleading UX.
+- Firebase now — correct long-term choice but not feasible in 3 days
+  alongside the rest of the assignment scope.
+
+**Consequences:**
+No save/load code to write or debug. Sessions are stateless which
+simplifies disconnect handling. Post-submission Firebase integration
+slots directly into the existing NetworkVariable data model.
+
+---
+
+## ADR-013: Stub-First Entity Hierarchy with Interface Contracts
+
+**Date:** feature/netcode-foundation
+**Status:** Accepted
+
+**Context:**
+The game vision includes enemy orbs, ally NPCs, boss orbs, and hazard
+zones — but none of these have behavior to implement yet. The question
+is whether to define their class structure now or defer entirely.
+
+**Decision:**
+Define the interface contracts and enum values now, stub the classes.
+IEntity (EntityType, Faction), IDamageable (TakeDamage, OnDeath), and
+IInteractable (OnInteract, GetInteractLabel) are fully defined.
+EntityType and Faction enums include all planned values.
+EnemyOrb.cs and AllyNPC.cs exist as class files that implement the
+interfaces but contain no behavior.
+
+**Rationale:**
+An interface is a promise. Defining IEntity now means PlayerController,
+EnemyOrb, and AllyNPC all speak the same language — WorldManager's spawn
+system, the targeting system, and the EntityStatTable all work against
+the interface, not the concrete type. Adding behavior to a stub later
+requires filling in methods, not changing callers.
+
+**Consequences:**
+Zero extra runtime cost — empty classes are compiled away. The
+EntityStatTable ScriptableObject can be created and populated in
+feature/world-layer without waiting for AI behavior. Every future entity
+type has a clearly marked entry point.
+
+---
+
+## ADR-014: ZoneState Enum as Single Source of Truth
+
+**Date:** feature/netcode-foundation (planned)
+**Status:** Accepted — implementation in feature/world-layer
+
+**Context:**
+The world has zones with complex interdependencies: spawn rates depend
+on zone safety, hazards depend on zone state, shop availability depends
+on zone state, fog of war depends on discovery state. Multiple boolean
+flags per zone would create inconsistent combinations and scattered
+conditional logic.
+
+**Decision:**
+A single ZoneState enum per zone, stored as NetworkVariable<ZoneState[]>
+on WorldManager. States: Undiscovered, Discovered, Contested, Safe.
+(FUTURE: Corrupted.) Every system reads this one value:
+- WorldManager.SpawnTick() looks up SpawnRateTable[zoneState]
+- DomainZone renders fog/reveal/hazard visuals based on zoneState
+- ZoneShop.OnInteract() checks zoneState == Safe before opening
+- EnemyOrb despawns when its zone transitions to Safe
+
+One NetworkVariable write cascades to all dependent behavior automatically.
+No additional sync messages needed.
+
+**Alternatives considered:**
+- Separate bool flags (isDiscovered, isSafe, isHazardous) — allows
+  impossible combinations (safe AND hazardous). Requires multiple
+  NetworkVariables. Logic scattered across systems.
+- Zone objects with full NetworkBehaviour state — overcomplicated,
+  expensive for an 8x8 zone grid.
+
+**Consequences:**
+Adding a new zone state (e.g. Corrupted) requires one enum value and
+one case in each reading system. The SpawnRateTable ScriptableObject
+has one row per ZoneState — designers can tune rates in the Inspector
+without touching code.
+
+---
+
+## ADR-015: WorldSeed Pattern for Deterministic Layout
+
+**Date:** feature/netcode-foundation (planned)
+**Status:** Accepted — implementation in feature/world-layer
+
+**Context:**
+The world layout (zone positions, hazard placements, station locations)
+needs to be identical on all clients without sending the full layout
+over the network. Two options: server sends layout data to all clients,
+or all clients generate the same layout from a shared seed.
+
+**Decision:**
+Host generates a random int seed at session start, stores it in
+NetworkVariable<int> worldSeed on WorldManager. Each client reads this
+seed and calls UnityEngine.Random.InitState(worldSeed) before running
+the layout generation algorithm. Because the algorithm is deterministic
+and all clients use the same seed, all clients produce the identical
+world layout with zero extra network cost.
+
+**Alternatives considered:**
+- Server sends full zone layout array — proportional to world size,
+  adds join latency, requires serialization of layout data.
+- Each client generates independently — would produce different layouts,
+  breaking cooperative play (different players see different worlds).
+- Procedural generation per-frame server-side only — clients would need
+  constant sync of every orb and zone state update.
+
+**Consequences:**
+World layout sync cost is exactly 4 bytes (one int). All procedural
+generation runs client-side from the seed. Layout algorithm must be
+purely deterministic — no Time.time, no platform-specific random,
+no floating point operations that might diverge across devices.
+The seed is set once at session start and never changes.
