@@ -57,6 +57,7 @@ public class LobbyManager : MonoBehaviour
     /// Fired when available sessions list is refreshed for the dashboard.
     public event Action<List<ISessionInfo>> OnSessionListRefreshed;
 
+
     // ─────────────────────────────────────────────────────────────────────────
     // STATE
     // ─────────────────────────────────────────────────────────────────────────
