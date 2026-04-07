@@ -114,9 +114,38 @@ public class GestureFeedbackUI : MonoBehaviour
     {
         if (autoBuildCanvas)
             BuildCanvas();
-
         if (feedbackTarget != null)
             AutoPopulateFeedback(feedbackTarget);
+
+        // Hide gesture overlay during MainMenu and Lobby — only visible during gameplay.
+        // GameManager may not exist yet at Awake if load order varies, so null-check
+        // and fall back to hiding by default until the phase fires.
+        gameObject.SetActive(false);
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.OnPhaseChanged += phase =>
+                gameObject.SetActive(phase == GameManager.GamePhase.Playing);
+        }
+        else
+        {
+            // GameManager initializes async — find it next frame.
+            StartCoroutine(LateSubscribeToPhaseChanges());
+        }
+    }
+
+    /// <summary>
+    /// Waits one frame for GameManager to initialize before subscribing
+    /// to phase changes. Only needed if GestureFeedbackUI Awake fires
+    /// before GameManager Awake in the Unity execution order.
+    /// </summary>
+    private System.Collections.IEnumerator LateSubscribeToPhaseChanges()
+    {
+        yield return null; // wait one frame
+        if (GameManager.Instance != null)
+        {
+            GameManager.Instance.OnPhaseChanged += phase =>
+                gameObject.SetActive(phase == GameManager.GamePhase.Playing);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
