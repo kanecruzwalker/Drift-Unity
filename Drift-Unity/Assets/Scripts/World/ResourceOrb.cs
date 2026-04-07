@@ -47,6 +47,9 @@ public class ResourceOrb : NetworkBehaviour
     [Tooltip("Resources awarded to the collecting player.")]
     [SerializeField] private int resourceValue = 1;
 
+    /// Public read-only access to resource value — used by WorldManager area collect.
+    public int ResourceValue => resourceValue;
+
     [Tooltip("Maximum distance from the orb the player can be to collect it.")]
     [SerializeField] private float collectRadius = 2.5f;
 
@@ -146,11 +149,23 @@ public class ResourceOrb : NetworkBehaviour
                 break;
 
             case OrbType.Guide:
-                // Drift slowly toward nearest undiscovered zone edge.
-                // FUTURE: implement zone-edge pathfinding
-                // For now: gentle drift in +X direction as placeholder
+                // Drift slowly toward the nearest undiscovered zone edge.
+                // Despawn when approaching the world boundary so guides never clip the edge.
                 transform.position += Vector3.right *
                     GameConstants.GuideOrbDriftSpeed * Time.deltaTime;
+
+                // Despawn if the orb has drifted to the world boundary margin.
+                // WorldManager will spawn new guides from active zones as needed.
+                float distFromEdge = GameConstants.WorldHalfExtent -
+                    Mathf.Max(
+                        Mathf.Abs(transform.position.x),
+                        Mathf.Abs(transform.position.z));
+
+                if (distFromEdge <= GameConstants.GuideOrbDespawnMargin)
+                {
+                    Debug.Log($"[ResourceOrb] Guide orb reached world boundary — despawning.");
+                    NetworkObject.Despawn(destroy: true);
+                }
                 break;
 
             case OrbType.Hazard:
@@ -284,6 +299,16 @@ public class ResourceOrb : NetworkBehaviour
             orbRenderer.material.EnableKeyword("_EMISSION");
             orbRenderer.material.SetColor("_EmissionColor", color * 2f);
         }
+    }
+
+    /// <summary>
+    /// Marks this orb as collected to prevent double-collect race conditions.
+    /// Called by WorldManager before despawning in area collect flow.
+    /// Individual tap collect uses the same _collected guard via RequestCollectServerRpc.
+    /// </summary>
+    public void MarkCollected()
+    {
+        _collected = true;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
