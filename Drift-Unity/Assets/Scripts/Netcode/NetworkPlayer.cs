@@ -65,7 +65,7 @@ public class NetworkPlayer : NetworkBehaviour
     public NetworkVariable<bool> isReady = new NetworkVariable<bool>(
         false,
         NetworkVariableReadPermission.Everyone,
-        NetworkVariableWritePermission.Owner);
+        NetworkVariableWritePermission.Server);
 
     // ─────────────────────────────────────────────────────────────────────────
     // NETWORK VARIABLES — Inventory
