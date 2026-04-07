@@ -243,5 +243,17 @@ public class DepositStation : NetworkBehaviour, IInteractable
     {
         if (!IsServer) return;
         ZoneIndex.Value = zoneIndex;
+
+        // Zone 0 starts Safe — reflect that visually immediately.
+        if (WorldManager.Instance != null)
+        {
+            ZoneState state = WorldManager.Instance.GetZoneState(zoneIndex);
+            if (state == ZoneState.Safe)
+            {
+                Progress.Value = GameConstants.StationFillThreshold;
+            }
+        }
     }
+
+
 }
