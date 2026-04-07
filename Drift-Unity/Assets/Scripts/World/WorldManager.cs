@@ -465,4 +465,88 @@ public class WorldManager : NetworkBehaviour
 
         return x + z * gridSize;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // AREA COLLECT — hold-pulse and three-finger burst
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Server-authoritative area collect — collects all eligible orbs within
+    /// radius of the requesting player's current position.
+    ///
+    /// Used by two gestures:
+    ///   OnHoldComplete     → radius = GameConstants.HoldPulseCollectRadius
+    ///   OnThreeFingerHold  → radius = HoldPulseCollectRadius * ThreeFingerBurstRadiusMultiplier
+    ///
+    /// Single RPC handles both cases — caller passes the appropriate radius.
+    /// Hazard orbs are excluded (same rule as tap collect).
+    /// Each collected orb awards its resourceValue to the requesting player.
+    /// All collected orbs are despawned server-side and replicated to all clients.
+    /// </summary>
+    [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
+    public void RequestAreaCollectServerRpc(float radius, RpcParams rpcParams = default)
+    {
+        ulong senderId = rpcParams.Receive.SenderClientId;
+
+        // Find the requesting player's NetworkPlayer and position.
+        NetworkPlayer player = null;
+        Vector3 playerPos = Vector3.zero;
+
+        foreach (var p in FindObjectsByType<NetworkPlayer>(FindObjectsSortMode.None))
+        {
+            if (p.OwnerClientId != senderId) continue;
+            player = p;
+            playerPos = p.worldPosition.Value;
+            break;
+        }
+
+        if (player == null)
+        {
+            Debug.LogWarning($"[WorldManager] AreaCollect: player not found for ClientId={senderId}");
+            return;
+        }
+
+        // Gather all ResourceOrb NetworkObjects within radius.
+        // Iterate zone orb lists — avoids a full scene FindObjectsByType each tick.
+        int totalCollected = 0;
+        int totalResources = 0;
+
+        foreach (var kvp in _orbsByZone)
+        {
+            // Iterate backwards so we can safely remove as we go.
+            List<NetworkObject> orbList = kvp.Value;
+            for (int i = orbList.Count - 1; i >= 0; i--)
+            {
+                NetworkObject netObj = orbList[i];
+                if (netObj == null) { orbList.RemoveAt(i); continue; }
+
+                ResourceOrb orb = netObj.GetComponent<ResourceOrb>();
+                if (orb == null) continue;
+
+                // Skip hazard orbs — not collectible.
+                if (orb.orbType.Value == OrbType.Hazard) continue;
+
+                float dist = Vector3.Distance(netObj.transform.position, playerPos);
+                if (dist > radius) continue;
+
+                // Award resources before despawning.
+                totalResources += orb.ResourceValue;
+                orb.MarkCollected();
+
+                // Remove from tracking list before despawn.
+                orbList.RemoveAt(i);
+                netObj.Despawn(destroy: true);
+                totalCollected++;
+            }
+        }
+
+        if (totalCollected > 0)
+        {
+            int newCount = player.resourceCount.Value + totalResources;
+            player.SetResourceCount(newCount);
+
+            Debug.Log($"[WorldManager] AreaCollect: ClientId={senderId} collected " +
+                      $"{totalCollected} orbs, +{totalResources} resources → total={newCount}");
+        }
+    }
 }
