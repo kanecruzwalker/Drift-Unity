@@ -85,33 +85,17 @@ public class DepositStation : NetworkBehaviour, IInteractable
     // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Called when a player enters the deposit radius.
-    /// Deposits all resources the player is carrying into the station.
-    /// Server validates the deposit and updates Progress NetworkVariable.
+    /// Called when a player enters deposit radius (IInteractable contract).
+    /// In the proximity drain model this is informational only — actual deposits
+    /// happen via DepositTickServerRpc on a coroutine from PlayerController.
+    /// Kept for future manual deposit gesture support (ADR-016).
     /// </summary>
     public void OnInteract(ulong playerId)
     {
-        if (!IsServer) return;
-        NetworkPlayer player = GetPlayerById(playerId);
-        if (player == null) return;
-
-        int amount = player.resourceCount.Value;
-        if (amount <= 0) return;
-
-        // Deduct resources from player.
-        player.SetResourceCount(0);
-
-        // Add to station progress — capped at fill threshold.
-        int newProgress = Mathf.Min(
-            Progress.Value + amount,
-            GameConstants.StationFillThreshold);
-        Progress.Value = newProgress;
-
-        Debug.Log($"[DepositStation] Player {playerId} deposited {amount}. " +
-                  $"Progress={newProgress}/{GameConstants.StationFillThreshold}");
-
-        // Check for zone state transitions.
-        CheckZoneTransition(newProgress);
+        // Proximity drain is handled via DepositTickServerRpc.
+        // This hook is preserved for future manual deposit gesture (e.g. 4-finger hold at station).
+        Debug.Log($"[DepositStation] OnInteract called by player {playerId} — " +
+                  $"drain is proximity-driven via DepositTickServerRpc.");
     }
 
     public string GetInteractLabel()
@@ -126,19 +110,47 @@ public class DepositStation : NetworkBehaviour, IInteractable
     // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Called by PlayerController when the player enters deposit radius.
-    /// Server validates and calls OnInteract with the sender's client ID.
+    /// Called by PlayerController each DepositTickInterval while the player
+    /// is within StationDepositRadius. Deposits one resource unit per call.
+    ///
+    /// Server validates:
+    ///   1. Player is still within deposit radius (guards against lag)
+    ///   2. Player has resources to deposit
+    ///   3. Station is not already full
+    ///
+    /// One unit per tick at DepositRatePerSecond — strategic drain, not instant.
+    /// See ADR-016 for deposit model rationale.
     /// </summary>
     [Rpc(SendTo.Server, InvokePermission = RpcInvokePermission.Everyone)]
-    public void RequestDepositServerRpc(RpcParams rpcParams = default)
+    public void DepositTickServerRpc(RpcParams rpcParams = default)
     {
+        if (Progress.Value >= GameConstants.StationFillThreshold) return;
+
+        NetworkPlayer player = GetPlayerById(rpcParams.Receive.SenderClientId);
+        if (player == null) return;
+
+        // Server-side proximity re-validation — guards against lag or teleport exploits.
         float dist = Vector3.Distance(
             transform.position,
-            GetPlayerById(rpcParams.Receive.SenderClientId)?.transform.position
-            ?? Vector3.one * 9999f);
+            player.transform.position);
 
-        if (dist <= GameConstants.StationDepositRadius * 2f)
-            OnInteract(rpcParams.Receive.SenderClientId);
+        if (dist > GameConstants.StationDepositRadius * 2f)
+        {
+            Debug.Log($"[DepositStation] DepositTick rejected — player out of range. dist={dist:F1}");
+            return;
+        }
+
+        if (player.resourceCount.Value <= 0) return;
+
+        // Deduct one unit from player, add one unit to station.
+        player.SetResourceCount(player.resourceCount.Value - 1);
+        int newProgress = Progress.Value + 1;
+        Progress.Value = newProgress;
+
+        Debug.Log($"[DepositStation] Deposit tick. Player={rpcParams.Receive.SenderClientId} " +
+                  $"Progress={newProgress}/{GameConstants.StationFillThreshold}");
+
+        CheckZoneTransition(newProgress);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
