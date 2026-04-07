@@ -258,33 +258,46 @@ public class PlayerController : NetworkBehaviour, IDamageable, IEntity
     // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Attempts to collect a ResourceOrb at the tap screen position.
-    /// Converts screen position to world ray, checks for orbs within
-    /// GameConstants.TapCollectRadius, and sends a collect ServerRpc
-    /// to the nearest valid orb.
+    /// Attempts to collect a ResourceOrb near the tap position.
+    /// Uses an overlap sphere at the player's position rather than a screen
+    /// raycast — more reliable against bobbing orbs and avoids perspective
+    /// misalignment on isometric camera angles.
     ///
-    /// Collection is server-authoritative — client sends request,
-    /// server validates and despawns (ADR-004).
+    /// Finds all orbs within TapCollectRadius, picks the closest one,
+    /// and sends a collect ServerRpc. Server validates and despawns (ADR-004).
     /// </summary>
     private void HandleSingleTap(Vector2 screenPos)
     {
         if (!IsOwner || !IsAlive) return;
 
-        Ray ray = Camera.main.ScreenPointToRay(new Vector3(screenPos.x, screenPos.y, 0));
-        RaycastHit hit;
+        // Use overlap sphere at player position — consistent hit detection
+        // regardless of orb Y-bobbing or camera angle.
+        Collider[] hits = Physics.OverlapSphere(
+            transform.position,
+            GameConstants.TapCollectRadius * 3f);
 
-        if (Physics.Raycast(ray, out hit, 100f))
+        ResourceOrb closest = null;
+        float minDist = float.MaxValue;
+
+        foreach (var hit in hits)
         {
-            ResourceOrb orb = hit.collider.GetComponent<ResourceOrb>();
-            if (orb != null)
+            ResourceOrb orb = hit.GetComponent<ResourceOrb>();
+            if (orb == null) continue;
+            if (orb.orbType.Value == OrbType.Hazard) continue;
+
+            float dist = Vector3.Distance(transform.position, hit.transform.position);
+            if (dist < minDist)
             {
-                float dist = Vector3.Distance(transform.position, hit.point);
-                if (dist <= GameConstants.TapCollectRadius * 3f)
-                {
-                    orb.RequestCollectServerRpc();
-                    Debug.Log($"[PlayerController] Tap collect requested. Orb={orb.name}");
-                }
+                minDist = dist;
+                closest = orb;
             }
+        }
+
+        if (closest != null)
+        {
+            closest.RequestCollectServerRpc();
+            Debug.Log($"[PlayerController] Tap collect requested. " +
+                      $"Orb={closest.name} dist={minDist:F1}");
         }
     }
 
