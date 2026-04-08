@@ -173,6 +173,11 @@ public class UIFeedback : MonoBehaviour
     /// True when a valid partner position is available for beam direction.
     private bool _beamTargetActive;
 
+    // Sprite for the collect range ring pulse — uses procedural circle if null.
+    private Sprite _collectRingSprite;
+
+    private float _lastHoldProgressTime = -1f;
+
     // ─────────────────────────────────────────────────────────────────────────
     // UNITY LIFECYCLE
     // ─────────────────────────────────────────────────────────────────────────
@@ -201,6 +206,39 @@ public class UIFeedback : MonoBehaviour
         RefreshPlayerAnchor();
         UpdateTiltArrow();
         UpdateFourFingerFeedback();
+        CheckHoldCancelled();
+    }
+
+    private void CheckHoldCancelled()
+    {
+        // If hold progress hasn't fired in 0.15s, the hold was released — clean up.
+        if (_lastHoldProgressTime > 0f &&
+            Time.time - _lastHoldProgressTime > 0.15f)
+        {
+            _lastHoldProgressTime = -1f;
+
+            // Clear radial fill.
+            if (holdRadialFill != null)
+            {
+                holdRadialFill.fillAmount = 0f;
+                SetImageAlpha(holdRadialFill, 0f);
+            }
+
+            // Cancel the ring coroutine and destroy its ring.
+            if (_collectRingCoroutine != null)
+            {
+                StopCoroutine(_collectRingCoroutine);
+                _collectRingCoroutine = null;
+                _holdRingComplete = false;
+
+                // Destroy any lingering CollectRing GameObjects.
+                foreach (Transform child in feedbackCanvas.transform)
+                {
+                    if (child.name == "CollectRing")
+                        Destroy(child.gameObject);
+                }
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -274,6 +312,8 @@ public class UIFeedback : MonoBehaviour
         GestureEvents.OnTiltAimed += HandleTiltAimed;
         GestureEvents.OnPinchDelta += HandlePinchDelta;
         GestureEvents.OnSwipe += HandleSwipe;
+        GestureEvents.OnHoldProgress += HandleHoldCollectRingProgress;
+        GestureEvents.OnHoldComplete += HandleHoldCollectRingComplete;
     }
 
     private void UnsubscribeFromEvents()
@@ -289,7 +329,116 @@ public class UIFeedback : MonoBehaviour
         GestureEvents.OnTiltAimed -= HandleTiltAimed;
         GestureEvents.OnPinchDelta -= HandlePinchDelta;
         GestureEvents.OnSwipe -= HandleSwipe;
+        GestureEvents.OnHoldProgress -= HandleHoldCollectRingProgress;
+        GestureEvents.OnHoldComplete -= HandleHoldCollectRingComplete;
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // COLLECT RANGE RING
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private Coroutine _collectRingCoroutine;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HOLD COLLECT RANGE RING — expands during two-finger hold charge
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HOLD COLLECT RANGE RING
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private bool _holdRingComplete = false;
+
+    private void HandleHoldCollectRingProgress(float progress)
+    {
+        _holdRingComplete = false;
+        if (_collectRingCoroutine == null && progress > 0.1f)
+            _collectRingCoroutine = StartCoroutine(CollectRingHoldAndBurst());
+    }
+
+    private void HandleHoldCollectRingComplete()
+    {
+        // Signal the hold coroutine to transition to the burst phase.
+        _holdRingComplete = true;
+    }
+
+    /// <summary>
+    /// Single coroutine managing both hold-grow and burst-fade phases.
+    /// Phase 1 (hold): ring grows with charge progress, driven by OnHoldProgress.
+    /// Phase 2 (burst): ring snaps to max size and fades out on OnHoldComplete.
+    /// Using one coroutine with one ring avoids the double-ring persistence bug.
+    /// </summary>
+    private IEnumerator CollectRingHoldAndBurst()
+    {
+        if (_playerTransform == null) { _collectRingCoroutine = null; yield break; }
+
+        GameObject ringObj = new GameObject("CollectRing");
+        ringObj.transform.SetParent(feedbackCanvas.transform, false);
+
+        UnityEngine.UI.Image ring = ringObj.AddComponent<UnityEngine.UI.Image>();
+        ring.sprite = null;
+        ring.color = new Color(0.72f, 0.83f, 1.00f, 0.5f);
+        ring.type = Image.Type.Simple;
+
+        Canvas ringCanvas = ringObj.AddComponent<Canvas>();
+        ringCanvas.overrideSorting = true;
+        ringCanvas.sortingOrder = 100;
+        ringObj.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+
+        RectTransform rt = ringObj.GetComponent<RectTransform>();
+        rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+        rt.pivot = new Vector2(0.5f, 0.5f);
+
+        RectTransform canvasRect = feedbackCanvas.GetComponent<RectTransform>();
+        float maxSize = GameConstants.HoldPulseCollectRadius * 120f;
+
+        // ── Phase 1: grow with hold progress ─────────────────────────────────
+        float safetyTimeout = 6f;
+        float elapsed = 0f;
+
+        while (!_holdRingComplete && elapsed < safetyTimeout)
+        {
+            UpdateRingPosition(rt, canvasRect);
+            elapsed += Time.deltaTime;
+            yield return null;
+            // Size is driven by HandleHoldProgress via holdRadialFill.fillAmount —
+            // read that to mirror the charge level without an extra parameter.
+            float progress = holdRadialFill != null ? holdRadialFill.fillAmount : elapsed / 2f;
+            float size = maxSize * progress;
+            rt.sizeDelta = new Vector2(size, size);
+            ring.color = new Color(0.72f, 0.83f, 1.00f, Mathf.Lerp(0.2f, 0.6f, progress));
+        }
+
+        // ── Phase 2: burst — snap to max and fade out ─────────────────────────
+        rt.sizeDelta = new Vector2(maxSize, maxSize);
+        float fadeDuration = 0.35f;
+        float fadeElapsed = 0f;
+
+        while (fadeElapsed < fadeDuration)
+        {
+            UpdateRingPosition(rt, canvasRect);
+            fadeElapsed += Time.deltaTime;
+            float t = fadeElapsed / fadeDuration;
+            ring.color = new Color(0.72f, 0.83f, 1.00f, Mathf.Lerp(0.6f, 0f, t));
+            yield return null;
+        }
+
+        Destroy(ringObj);
+        _collectRingCoroutine = null;
+        _holdRingComplete = false;
+    }
+
+    private void UpdateRingPosition(RectTransform rt, RectTransform canvasRect)
+    {
+        Vector2 localPoint;
+        RectTransformUtility.ScreenPointToLocalPointInRectangle(
+            canvasRect, _playerScreenPos,
+            feedbackCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : Camera.main,
+            out localPoint);
+        rt.anchoredPosition = localPoint;
+    }
+
+
 
     // ─────────────────────────────────────────────────────────────────────────
     // SINGLE TAP — screen-space pop flash at touch position
@@ -399,6 +548,8 @@ public class UIFeedback : MonoBehaviour
     /// </summary>
     private void HandleHoldProgress(float progress)
     {
+        _lastHoldProgressTime = Time.time;
+        
         if (holdRadialFill == null) return;
 
         holdRadialFill.rectTransform.position = _playerScreenPos;
