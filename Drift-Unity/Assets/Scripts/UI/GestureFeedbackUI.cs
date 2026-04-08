@@ -114,9 +114,39 @@ public class GestureFeedbackUI : MonoBehaviour
     {
         if (autoBuildCanvas)
             BuildCanvas();
-
         if (feedbackTarget != null)
             AutoPopulateFeedback(feedbackTarget);
+
+        // Hide all feedback elements during MainMenu/Lobby — keep GameObject active
+        // so UIFeedback can still parent dynamic elements (collect ring etc) to the canvas.
+        HideAllElements();
+
+        _phaseHandler = phase =>
+        {
+            bool playing = phase == GameManager.GamePhase.Playing;
+            // Show/hide elements but never deactivate the GameObject itself.
+            if (!playing) HideAllElements();
+        };
+
+        if (GameManager.Instance != null)
+            GameManager.Instance.OnPhaseChanged += _phaseHandler;
+        else
+            StartCoroutine(LateSubscribeToPhaseChanges());
+    }
+
+    private System.Action<GameManager.GamePhase> _phaseHandler;
+
+    private System.Collections.IEnumerator LateSubscribeToPhaseChanges()
+    {
+        yield return null;
+        if (GameManager.Instance != null)
+            GameManager.Instance.OnPhaseChanged += _phaseHandler;
+    }
+
+    private void OnDestroy()
+    {
+        if (GameManager.Instance != null)
+            GameManager.Instance.OnPhaseChanged -= _phaseHandler;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

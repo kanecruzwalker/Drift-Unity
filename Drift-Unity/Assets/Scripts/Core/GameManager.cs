@@ -79,6 +79,8 @@ public class GameManager : MonoBehaviour
     /// The authenticated player's UGS ID. Empty until authentication completes.
     public string LocalPlayerId { get; private set; } = string.Empty;
 
+    /// True if the local player is the session host.
+    public bool IsHost => RelayManager.Instance?.IsHost ?? false;
     // ─────────────────────────────────────────────────────────────────────────
     // UNITY LIFECYCLE
     // ─────────────────────────────────────────────────────────────────────────
@@ -87,9 +89,15 @@ public class GameManager : MonoBehaviour
     {
         await InitializeUGS();
 
+
+        // Session starts via MainMenuUI Host/Join buttons — see feature/hud-and-polish.
+        // StartSoloSession() was here as a temp during feature/player-controller and
+        // feature/world-layer testing. Removed in feature/game-loop (ADR-016 session notes).
+
         // TEMP: auto-start solo session for player movement testing
         // Remove before feature/game-loop wires the real UI flow
-        await StartSoloSession();
+        // await StartSoloSession();
+
     }
 
     private void OnEnable()
@@ -165,7 +173,7 @@ public class GameManager : MonoBehaviour
     /// Creates a new session and transitions to Lobby phase.
     /// Returns the join code on success, null on failure.
     /// </summary>
-    public async Task<string> HostSession(GameMode mode = GameMode.Passive)
+    public async Task<string> HostSession(GameMode mode = GameMode.Passive, bool isPublic = true)
     {
         if (!IsUGSReady)
         {

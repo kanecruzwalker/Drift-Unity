@@ -51,18 +51,30 @@ public static class GameConstants
     /// Speed at which Guide orbs drift toward undiscovered zone edges.
     public const float GuideOrbDriftSpeed = 1.5f;
 
+    /// Distance from WorldHalfExtent at which Guide orbs are despawned.
+    /// Keeps guides from clipping the world edge visually.
+    public const float GuideOrbDespawnMargin = 5f;
+
     // ─────────────────────────────────────────────────────────────────────────
     // STATION
     // ─────────────────────────────────────────────────────────────────────────
 
     /// Resources required to fill a station and trigger ZoneState → Safe transition.
-    public const int StationFillThreshold = 50;
+    public const int StationFillThreshold = 20;
 
     /// Resources required to trigger ZoneState → Contested (partial fill indicator).
     public const int StationContestedThreshold = 15;
 
     /// Radius around a station within which a player can deposit resources.
     public const float StationDepositRadius = 3f;
+
+    /// Resources deposited per second when a player is within StationDepositRadius.
+    /// Drain is one unit per tick at this rate — strategic, not instant (ADR-016).
+    public const float DepositRatePerSecond = 2f;
+
+    /// How often (seconds) the deposit tick fires while a player is in range.
+    /// 1f / DepositRatePerSecond = 0.5s between ticks for 2 units/sec.
+    public const float DepositTickInterval = 0.5f;
 
     // ─────────────────────────────────────────────────────────────────────────
     // PLAYER

@@ -1,6 +1,7 @@
 ﻿using Unity.Netcode;
 using Unity.Netcode.Components;
 using UnityEngine;
+using System.Collections;
 
 /// <summary>
 /// PlayerController — the local player's networked movement and ability controller.
@@ -71,6 +72,12 @@ public class PlayerController : NetworkBehaviour, IDamageable, IEntity
     /// True if this player is alive (health > 0).
     public bool IsAlive { get; private set; } = true;
 
+    /// Coroutine handle for the active deposit drain tick — null when not depositing.
+    private Coroutine _depositCoroutine;
+
+    /// The station currently being deposited into — null when out of range.
+    private DepositStation _nearbyStation;
+
     // ─────────────────────────────────────────────────────────────────────────
     // UNITY LIFECYCLE
     // ─────────────────────────────────────────────────────────────────────────
@@ -129,6 +136,8 @@ public class PlayerController : NetworkBehaviour, IDamageable, IEntity
         GestureEvents.OnSingleTap += HandleSingleTap;
         GestureEvents.OnTiltChanged += HandleTiltChanged;
         GestureEvents.OnFourFingerHold += HandleFourFingerHold;
+        GestureEvents.OnHoldComplete += HandleHoldComplete;
+        GestureEvents.OnThreeFingerHold += HandleThreeFingerBurst;
     }
 
     private void UnsubscribeFromEvents()
@@ -138,6 +147,8 @@ public class PlayerController : NetworkBehaviour, IDamageable, IEntity
         GestureEvents.OnSingleTap -= HandleSingleTap;
         GestureEvents.OnTiltChanged -= HandleTiltChanged;
         GestureEvents.OnFourFingerHold -= HandleFourFingerHold;
+        GestureEvents.OnHoldComplete -= HandleHoldComplete;
+        GestureEvents.OnThreeFingerHold -= HandleThreeFingerBurst;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -247,33 +258,46 @@ public class PlayerController : NetworkBehaviour, IDamageable, IEntity
     // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Attempts to collect a ResourceOrb at the tap screen position.
-    /// Converts screen position to world ray, checks for orbs within
-    /// GameConstants.TapCollectRadius, and sends a collect ServerRpc
-    /// to the nearest valid orb.
+    /// Attempts to collect a ResourceOrb near the tap position.
+    /// Uses an overlap sphere at the player's position rather than a screen
+    /// raycast — more reliable against bobbing orbs and avoids perspective
+    /// misalignment on isometric camera angles.
     ///
-    /// Collection is server-authoritative — client sends request,
-    /// server validates and despawns (ADR-004).
+    /// Finds all orbs within TapCollectRadius, picks the closest one,
+    /// and sends a collect ServerRpc. Server validates and despawns (ADR-004).
     /// </summary>
     private void HandleSingleTap(Vector2 screenPos)
     {
         if (!IsOwner || !IsAlive) return;
 
-        Ray ray = Camera.main.ScreenPointToRay(new Vector3(screenPos.x, screenPos.y, 0));
-        RaycastHit hit;
+        // Use overlap sphere at player position — consistent hit detection
+        // regardless of orb Y-bobbing or camera angle.
+        Collider[] hits = Physics.OverlapSphere(
+            transform.position,
+            GameConstants.TapCollectRadius * 3f);
 
-        if (Physics.Raycast(ray, out hit, 100f))
+        ResourceOrb closest = null;
+        float minDist = float.MaxValue;
+
+        foreach (var hit in hits)
         {
-            ResourceOrb orb = hit.collider.GetComponent<ResourceOrb>();
-            if (orb != null)
+            ResourceOrb orb = hit.GetComponent<ResourceOrb>();
+            if (orb == null) continue;
+            if (orb.orbType.Value == OrbType.Hazard) continue;
+
+            float dist = Vector3.Distance(transform.position, hit.transform.position);
+            if (dist < minDist)
             {
-                float dist = Vector3.Distance(transform.position, hit.point);
-                if (dist <= GameConstants.TapCollectRadius * 3f)
-                {
-                    orb.RequestCollectServerRpc();
-                    Debug.Log($"[PlayerController] Tap collect requested. Orb={orb.name}");
-                }
+                minDist = dist;
+                closest = orb;
             }
+        }
+
+        if (closest != null)
+        {
+            closest.RequestCollectServerRpc();
+            Debug.Log($"[PlayerController] Tap collect requested. " +
+                      $"Orb={closest.name} dist={minDist:F1}");
         }
     }
 
@@ -311,6 +335,161 @@ public class PlayerController : NetworkBehaviour, IDamageable, IEntity
         Debug.Log($"[PlayerController] Sharing {GameConstants.ShareGestureTransferAmount} " +
                   $"resources with ClientId={nearestPartner.OwnerClientId}");
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ABILITIES — Hold complete (area vacuum collect)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Fired once when the two-finger hold charge reaches full.
+    /// Sends a single area collect RPC to the server with HoldPulseCollectRadius.
+    /// Server finds all eligible orbs within radius and awards resources.
+    /// </summary>
+    private void HandleHoldComplete()
+    {
+        if (!IsOwner || !IsAlive) return;
+
+        WorldManager.Instance?.RequestAreaCollectServerRpc(
+            GameConstants.HoldPulseCollectRadius);
+
+        Debug.Log($"[PlayerController] Hold-pulse area collect. " +
+                  $"Radius={GameConstants.HoldPulseCollectRadius}");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ABILITIES — Three finger burst (3x radius area collect)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Fired each frame while 3 fingers are held.
+    /// Uses the same area collect RPC as hold-pulse but with 3x radius.
+    /// Rate-limited to once per second to avoid spamming the server.
+    /// </summary>
+    private float _burstCooldown = 0f;
+
+    private void HandleThreeFingerBurst()
+    {
+        if (!IsOwner || !IsAlive) return;
+        if (Time.time < _burstCooldown) return;
+
+        float burstRadius = GameConstants.HoldPulseCollectRadius *
+                            GameConstants.ThreeFingerBurstRadiusMultiplier;
+
+        WorldManager.Instance?.RequestAreaCollectServerRpc(burstRadius);
+        _burstCooldown = Time.time + 1f;
+
+        Debug.Log($"[PlayerController] Three-finger burst collect. " +
+                  $"Radius={burstRadius}");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PROXIMITY DEPOSIT
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Called from Update to check proximity to all deposit stations.
+    /// Starts the deposit drain coroutine when entering range,
+    /// stops it when leaving range. Auto-engages and auto-disengages.
+    /// </summary>
+    private void CheckDepositProximity()
+    {
+        if (!IsOwner || !IsAlive) return;
+
+        DepositStation closest = FindClosestStation();
+
+        if (closest != null)
+        {
+            // Entered range of a new station or same station.
+            if (_nearbyStation != closest)
+            {
+                // Switched stations or just entered range — restart coroutine.
+                StopDepositCoroutine();
+                _nearbyStation = closest;
+                _depositCoroutine = StartCoroutine(DepositDrainCoroutine());
+                Debug.Log($"[PlayerController] Entered deposit range of station " +
+                          $"in zone {closest.ZoneIndex.Value}");
+            }
+        }
+        else
+        {
+            // Out of range of all stations.
+            if (_nearbyStation != null)
+            {
+                StopDepositCoroutine();
+                Debug.Log("[PlayerController] Left deposit range — drain stopped.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Finds the closest DepositStation within StationDepositRadius.
+    /// Returns null if none are in range.
+    /// </summary>
+    private DepositStation FindClosestStation()
+    {
+        DepositStation closest = null;
+        float minDist = GameConstants.StationDepositRadius;
+
+        foreach (var station in
+            FindObjectsByType<DepositStation>(FindObjectsSortMode.None))
+        {
+            // Skip full stations — no point draining into a complete zone.
+            if (station.Progress.Value >= GameConstants.StationFillThreshold) continue;
+
+            float dist = Vector3.Distance(
+                transform.position, station.transform.position);
+
+            if (dist < minDist)
+            {
+                minDist = dist;
+                closest = station;
+            }
+        }
+        return closest;
+    }
+
+    /// <summary>
+    /// Coroutine that fires DepositTickServerRpc every DepositTickInterval
+    /// while the player remains in range of _nearbyStation.
+    /// Automatically stops if the station fills or the player has no resources.
+    /// The range check in DepositTickServerRpc on the server is the authority —
+    /// this coroutine is a convenience driver, not the guard.
+    /// </summary>
+    private IEnumerator DepositDrainCoroutine()
+    {
+        while (_nearbyStation != null)
+        {
+            // Local early-out checks — reduce unnecessary RPCs.
+            if (networkPlayer != null && networkPlayer.resourceCount.Value <= 0)
+            {
+                Debug.Log("[PlayerController] No resources to deposit — drain paused.");
+                yield return new WaitForSeconds(GameConstants.DepositTickInterval);
+                continue;
+            }
+
+            if (_nearbyStation.Progress.Value >= GameConstants.StationFillThreshold)
+            {
+                Debug.Log("[PlayerController] Station full — drain stopped.");
+                StopDepositCoroutine();
+                yield break;
+            }
+
+            _nearbyStation.DepositTickServerRpc();
+            yield return new WaitForSeconds(GameConstants.DepositTickInterval);
+        }
+    }
+
+    private void StopDepositCoroutine()
+    {
+        if (_depositCoroutine != null)
+        {
+            StopCoroutine(_depositCoroutine);
+            _depositCoroutine = null;
+        }
+        _nearbyStation = null;
+    }
+
+
 
     /// <summary>
     /// Finds the nearest NetworkPlayer that is not this player.
@@ -390,6 +569,7 @@ public class PlayerController : NetworkBehaviour, IDamageable, IEntity
     {
         if (!IsOwner) return;
         ApplyWorldBoundary();
+        CheckDepositProximity();
     }
 
     private void ApplyWorldBoundary()

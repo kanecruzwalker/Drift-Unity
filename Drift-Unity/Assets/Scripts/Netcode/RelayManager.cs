@@ -49,6 +49,8 @@ public class RelayManager : MonoBehaviour
     // STATE
     // ─────────────────────────────────────────────────────────────────────────
 
+
+
     /// The active session. Null when not in a session.
     public ISession CurrentSession { get; private set; }
 
@@ -57,6 +59,9 @@ public class RelayManager : MonoBehaviour
 
     /// True when a session is active.
     public bool IsInSession => CurrentSession != null;
+
+    /// True if the local client is the session host.
+    public bool IsHost => CurrentSession != null && CurrentSession.IsHost;
 
     // ─────────────────────────────────────────────────────────────────────────
     // HOST — Create Session
