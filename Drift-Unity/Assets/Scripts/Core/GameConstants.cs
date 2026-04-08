@@ -60,7 +60,7 @@ public static class GameConstants
     // ─────────────────────────────────────────────────────────────────────────
 
     /// Resources required to fill a station and trigger ZoneState → Safe transition.
-    public const int StationFillThreshold = 50;
+    public const int StationFillThreshold = 20;
 
     /// Resources required to trigger ZoneState → Contested (partial fill indicator).
     public const int StationContestedThreshold = 15;
