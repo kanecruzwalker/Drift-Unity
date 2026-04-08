@@ -458,3 +458,37 @@ generation runs client-side from the seed. Layout algorithm must be
 purely deterministic — no Time.time, no platform-specific random,
 no floating point operations that might diverge across devices.
 The seed is set once at session start and never changes.
+
+
+
+## ADR-016: Proximity Deposit Drain Model
+
+**Date:** feature/game-loop
+**Status:** Accepted
+
+**Context:**
+DepositStation needed a deposit mechanic. Two models were considered:
+instant full-dump (walk in → all resources transfer immediately) and
+proximity drain (walk in → resources transfer one unit per tick until
+player leaves or station fills).
+
+**Decision:**
+Proximity drain — one resource unit per DepositTickInterval (0.5s)
+while the player is within StationDepositRadius. Auto-engages on entry,
+auto-disengages on exit. No gesture required.
+
+PlayerController runs a DepositDrainCoroutine that fires DepositTickServerRpc
+each tick. Server re-validates proximity on every tick. Station fills
+gradually — players see progress build visually.
+
+A stub hook remains in OnInteract() for a future manual burst-deposit gesture.
+
+**Rationale:**
+Drain creates a spatial commitment — standing near a station is a real
+choice. Auto-engage/disengage keeps it frictionless. DepositRatePerSecond
+lives in GameConstants — balance is tunable without code changes.
+
+**Consequences:**
+Players moving through a zone will naturally bleed resources into any
+station they pass near. DepositRatePerSecond should be tuned so a player
+with a full inventory takes ~25 seconds to fully empty into a station.
