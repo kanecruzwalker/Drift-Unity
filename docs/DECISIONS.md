@@ -214,7 +214,8 @@ Two-finger hold was immediately hijacked by pinch when fingers micro-moved while
 ## ADR-009: Rigidbody Force-Based Movement over Transform
 
 **Date:** feature/netcode-foundation (planned)
-**Status:** Accepted — implementation in feature/player-controller
+**Status:** Accepted — implemented and verified on Galaxy A17 5G
+
 
 **Context:**
 PlayerController needs a movement model that feels satisfying on mobile.
@@ -280,7 +281,10 @@ ADR supersedes ADR-002's Relay implementation details.
 ## ADR-011: Three Camera Modes via CameraRig State Machine
 
 **Date:** feature/netcode-foundation (planned)
-**Status:** Accepted — implementation in feature/player-controller
+**Status:** Accepted — implemented in feature/player-controller.
+CycleMode() ready, wired to HUD button in feature/hud-and-polish.
+Verified in editor, device test pending HUD button.
+
 
 **Context:**
 Different players have different spatial preferences for a top-down

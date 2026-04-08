@@ -41,6 +41,45 @@
 
 ---
 
+
+## Player Layer — Added in feature/player-controller
+
+### Player/
+- **PlayerController.cs** — NetworkBehaviour + Rigidbody force-based movement (ADR-009).
+  Subscribes to GestureEvents: swipe applies camera-relative impulse, tilt applies
+  continuous ambient drift, double-tap dash fires in velocity direction, single-tap
+  raycast sends RequestCollectServerRpc to ResourceOrb, 4-finger hold finds nearest
+  partner and wires beam to UIFeedback.SetBeamTarget(). Implements IDamageable and
+  IEntity. Tagged "Player" for UIFeedback auto-connect. World soft-boundary pushback
+  applied in Update when approaching WorldHalfExtent.
+- **PlayerVisuals.cs** — NetworkBehaviour. Cosmetic only, no game logic. Reads
+  playerColor NetworkVariable and applies to material with HDR emission boost.
+  Breathing pulse oscillation, trail renderer on movement, scale pulse on dash,
+  white emission flash on damage, scale-down fade on death.
+- **CameraRig.cs** — on Main Camera. Three modes via state machine (ADR-011):
+  Isometric (45° default), TopDown (70° overhead), ThirdPerson (behind player).
+  Smooth lerp follow in LateUpdate. Mode cycled via CycleMode() — called by HUD
+  button in feature/hud-and-polish. Preference saved to PlayerPrefs.
+
+### World stubs (full implementation in feature/world-layer)
+- **ResourceOrb.cs** — stub with OrbType enum and RequestCollectServerRpc.
+- **WorldManager.cs** — singleton stub, Instance reference ready.
+
+### Scene additions
+- Player prefab: Sphere + Rigidbody + NetworkObject + NetworkTransform +
+  PlayerController + PlayerVisuals + NetworkPlayer + Trail child
+- CameraRig component added to Main Camera
+- Player prefab registered in DefaultNetworkPrefabs
+
+### Fixes applied this branch
+- Camera-relative swipe: delta projected onto camForward/camRight flattened to XZ
+  plane — corrects diagonal movement under isometric camera angle
+- Dash burst: requires active velocity to fire, no-op when stationary
+- TiltDriftForce tuned to 2.5f in GameConstants
+
+
+
+
 ## Netcode Layer — Added in feature/netcode-foundation
 
 ### Core/
