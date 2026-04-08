@@ -142,6 +142,47 @@
 
 
 
+## Game Loop Layer — Added in feature/game-loop
+
+### Core additions
+- **GameManager.cs** — removed temp StartSoloSession auto-call. HostSession now
+  accepts isPublic flag. IsHost property reads RelayManager.CurrentSession.IsHost.
+  Phase machine drives MainMenuUI and LobbyUI show/hide via OnPhaseChanged.
+
+### UI/
+- **MainMenuUI.cs** — Host Public, Host Private, Browse (open session list),
+  Join by Code input. Subscribes to GameManager.OnPhaseChanged. Status text
+  clears on MainMenu entry. Button lock during async UGS operations.
+- **LobbyUI.cs** — Join code display with copy button. Player list with ready
+  states. EvaluateStartButton checks all NetworkPlayer.isReady values — handles
+  solo (1 player) and multi-player (all must be ready). Start button host-only.
+  Hides on Playing phase transition.
+- **SessionRowUI.cs** — single row in the browse session list. Session ID,
+  player count, Join button with closure-captured session ID.
+
+### World additions
+- **WorldManager.cs** — RequestAreaCollectServerRpc: single server RPC handling
+  both hold-pulse (HoldPulseCollectRadius) and 3-finger burst (radius * multiplier).
+  Iterates _orbsByZone directly. Center zone corrected to index 36 (grid 4,4).
+- **DepositStation.cs** — DepositTickServerRpc replaces instant dump. Proximity
+  drain at DepositRatePerSecond. Material instanced per station. Center zone
+  station initializes at full progress (teal) as Safe origin visual.
+- **ResourceOrb.cs** — ResourceValue public property, MarkCollected() guard,
+  Guide orb despawn at world boundary margin.
+
+### Player additions
+- **PlayerController.cs** — OnHoldComplete wired to WorldManager.RequestAreaCollectServerRpc.
+  OnThreeFingerHold wired to burst radius variant (1s rate limit). Proximity
+  deposit coroutine auto-engages/disengages on DepositStation proximity.
+
+### UI feedback additions
+- **UIFeedback.cs** — Hold collect ring: grows with OnHoldProgress charge level,
+  bursts to max size on OnHoldComplete, cleaned up by CheckHoldCancelled when
+  hold released before completion. Radial fill also cleared on cancel.
+- **GestureFeedbackUI.cs** — Phase handler hides elements (not deactivates
+  GameObject) so GestureFeedbackCanvas stays active for dynamic child parenting.
+
+
 
 ## Netcode Layer — Added in feature/netcode-foundation
 
