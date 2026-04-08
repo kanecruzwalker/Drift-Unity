@@ -117,35 +117,36 @@ public class GestureFeedbackUI : MonoBehaviour
         if (feedbackTarget != null)
             AutoPopulateFeedback(feedbackTarget);
 
-        // Hide gesture overlay during MainMenu and Lobby — only visible during gameplay.
-        // GameManager may not exist yet at Awake if load order varies, so null-check
-        // and fall back to hiding by default until the phase fires.
-        gameObject.SetActive(false);
+        // Hide all feedback elements during MainMenu/Lobby — keep GameObject active
+        // so UIFeedback can still parent dynamic elements (collect ring etc) to the canvas.
+        HideAllElements();
+
+        _phaseHandler = phase =>
+        {
+            bool playing = phase == GameManager.GamePhase.Playing;
+            // Show/hide elements but never deactivate the GameObject itself.
+            if (!playing) HideAllElements();
+        };
+
         if (GameManager.Instance != null)
-        {
-            GameManager.Instance.OnPhaseChanged += phase =>
-                gameObject.SetActive(phase == GameManager.GamePhase.Playing);
-        }
+            GameManager.Instance.OnPhaseChanged += _phaseHandler;
         else
-        {
-            // GameManager initializes async — find it next frame.
             StartCoroutine(LateSubscribeToPhaseChanges());
-        }
     }
 
-    /// <summary>
-    /// Waits one frame for GameManager to initialize before subscribing
-    /// to phase changes. Only needed if GestureFeedbackUI Awake fires
-    /// before GameManager Awake in the Unity execution order.
-    /// </summary>
+    private System.Action<GameManager.GamePhase> _phaseHandler;
+
     private System.Collections.IEnumerator LateSubscribeToPhaseChanges()
     {
-        yield return null; // wait one frame
+        yield return null;
         if (GameManager.Instance != null)
-        {
-            GameManager.Instance.OnPhaseChanged += phase =>
-                gameObject.SetActive(phase == GameManager.GamePhase.Playing);
-        }
+            GameManager.Instance.OnPhaseChanged += _phaseHandler;
+    }
+
+    private void OnDestroy()
+    {
+        if (GameManager.Instance != null)
+            GameManager.Instance.OnPhaseChanged -= _phaseHandler;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
