@@ -122,8 +122,12 @@ public class WorldManager : NetworkBehaviour
 
             Debug.Log($"[WorldManager] World seed: {worldSeed.Value}");
 
-            // Zone 0 (center) starts Safe — players spawn here.
-            SetZoneState(0, ZoneState.Safe);
+            // The true center zone containing world origin (0,0,0).
+            // Grid is 8x8, center cell is (4,4) → index = 4 + 4*8 = 36.
+            int centerIndex = (GameConstants.ZoneGridSize / 2) +
+                              (GameConstants.ZoneGridSize / 2) * GameConstants.ZoneGridSize;
+            SetZoneState(centerIndex, ZoneState.Safe);
+            Debug.Log($"[WorldManager] Center zone index={centerIndex} set to Safe.");
 
             // Spawn deposit stations for all zones.
             SpawnDepositStations();
@@ -155,8 +159,9 @@ public class WorldManager : NetworkBehaviour
         for (int i = 0; i < ZoneCount; i++)
             _zoneStates[i] = ZoneState.Undiscovered;
 
-        // Center zone starts Safe.
-        int centerIndex = ZoneCount / 2;
+        // True center zone containing world origin.
+        int centerIndex = (GameConstants.ZoneGridSize / 2) +
+                          (GameConstants.ZoneGridSize / 2) * GameConstants.ZoneGridSize;
         _zoneStates[centerIndex] = ZoneState.Safe;
     }
 
