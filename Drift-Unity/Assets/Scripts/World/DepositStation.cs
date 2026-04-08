@@ -72,6 +72,12 @@ public class DepositStation : NetworkBehaviour, IInteractable
         if (stationRenderer == null)
             stationRenderer = GetComponent<Renderer>();
 
+        // Force a unique material instance for this station so color changes
+        // don't affect all stations sharing the same material asset.
+        // Accessing .material (not .sharedMaterial) triggers Unity's instance creation.
+        if (stationRenderer != null)
+            _ = stationRenderer.material; // forces instance
+
         UpdateVisual(Progress.Value);
     }
 
@@ -244,14 +250,12 @@ public class DepositStation : NetworkBehaviour, IInteractable
         if (!IsServer) return;
         ZoneIndex.Value = zoneIndex;
 
-        // Zone 0 starts Safe — reflect that visually immediately.
-        if (WorldManager.Instance != null)
+        int centerIndex = (GameConstants.ZoneGridSize / 2) +
+                          (GameConstants.ZoneGridSize / 2) * GameConstants.ZoneGridSize;
+        if (zoneIndex == centerIndex)
         {
-            ZoneState state = WorldManager.Instance.GetZoneState(zoneIndex);
-            if (state == ZoneState.Safe)
-            {
-                Progress.Value = GameConstants.StationFillThreshold;
-            }
+            Progress.Value = GameConstants.StationFillThreshold;
+            Debug.Log($"[DepositStation] Zone {zoneIndex} (center/origin) initialized as full/Safe.");
         }
     }
 
